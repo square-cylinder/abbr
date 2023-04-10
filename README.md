@@ -38,3 +38,7 @@ a line to a file kept on the local machine that stores the acronym.
 For looking up an abbreviation, I would like to supply the short form, and then
 the program simply reads out what it could stand for (there can be multiple answers).
 
+## Ideas for more features
+ * Be able to list all stored abbreviations
+ * Be able to add descriptions to abbreviations if you forgot what they mean
+ * Be able to test yourself on a random abbreviation that you have put in, so that you can practise your knowledge
