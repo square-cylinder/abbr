@@ -1,5 +1,18 @@
 # Abbreviations
 
+## Usage
+`abbr put <SHORT> <LONG>` to store an abbreviation
+`abbr get <SHORT>` to retrieve what an abbreviation means
+
+**NOTE:** Can have multiple abbreviations that mean the same thing, in that case
+you will get every possibility when you look it up
+### Example
+```sh
+$ abbr put "CPU" "Central Processing Unit"
+$ abbr get CPU
+Central Processing Unit
+```
+
 ## Background
 I am in the process of learning a bunch of different computer science topics
 but find that I am often struggling with acronyms. To deal with this I started
@@ -15,8 +28,8 @@ I would like to start dipping my toes in.
 ## Features
 I want to create a simple app that I can invoke in two modes with a commandline option:
 
-1. Add an abbreviation
-2. Look up an abbreviation
+[X] Add an abbreviation
+[X] Look up an abbreviation
 
 For adding an abbreviation, I would have to give two additional arguments, firstly
 what the short form is, and secondly what it stands for. The program will then append
