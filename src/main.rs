@@ -1,6 +1,7 @@
 use std::fmt;
+use std::fs::OpenOptions;
 use std::{path::{Path, PathBuf}, fs};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::error;
 
 use clap::{Subcommand, Parser};
@@ -76,7 +77,12 @@ impl ProgramFolder {
     fn write_storage(&self) -> io::Result<fs::File> {
         let mut storage = self.path.clone();
         storage.push(Self::STORAGE_FILENAME);
-        fs::File::create(storage)
+        OpenOptions::new()
+            .read(false)
+            .write(false)
+            .create(true)
+            .append(true)
+            .open(storage)
     }
 }
 
@@ -127,12 +133,30 @@ fn print_possibilities(search: &str) {
     };
     if m.is_empty() {
         println!("No matches found :(");
+    } else if m.len() == 1 {
+        println!("{}",  m[0]);
     } else {
         println!("Possibilities:");
         for v in m {
             println!(" * {v}");
         }
     }
+}
+
+fn store_abbr(abbr: &str, full: &str) -> Result<(), ()> {
+    let p = match ProgramFolder::new() {
+        Ok(val) => val,
+        Err(_) => return Err(())
+    };
+    let mut f = match p.write_storage() {
+        Ok(val) => val,
+        Err(_) => return Err(())
+    };
+    match writeln!(f, "{}:{}", abbr, full) {
+        Ok(_) => (),
+        Err(_) => return Err(())
+    };
+    Ok(())
 }
 
 fn main() {
@@ -142,7 +166,10 @@ fn main() {
             print_possibilities(&abbr);
         },
         SubCommand::Put { abbr, full } => {
-            todo!()
+            match store_abbr(&abbr, &full) {
+                Ok(_) => println!("Success!"),
+                Err(_) => println!("Failed...")
+            };
         }
     }
 }
