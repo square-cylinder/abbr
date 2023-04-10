@@ -28,8 +28,8 @@ I would like to start dipping my toes in.
 ## Features
 I want to create a simple app that I can invoke in two modes with a commandline option:
 
-[X] Add an abbreviation
-[X] Look up an abbreviation
+- [x] Add an abbreviation
+- [x] Look up an abbreviation
 
 For adding an abbreviation, I would have to give two additional arguments, firstly
 what the short form is, and secondly what it stands for. The program will then append
