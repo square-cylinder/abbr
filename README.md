@@ -1,8 +1,8 @@
 # Abbreviations
 
 ## Usage
-`abbr put <SHORT> <LONG>` to store an abbreviation
-`abbr get <SHORT>` to retrieve what an abbreviation means
+ * `abbr put <SHORT> <LONG>` to store an abbreviation
+ * `abbr get <SHORT>` to retrieve what an abbreviation means
 
 **NOTE:** Can have multiple abbreviations that mean the same thing, in that case
 you will get every possibility when you look it up
