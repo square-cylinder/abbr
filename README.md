@@ -19,7 +19,7 @@ I want to create a simple app that I can invoke in two modes with a commandline 
 2. Look up an abbreviation
 
 For adding an abbreviation, I would have to give two additional arguments, firstly
-what the short form is, and secondly what it stnads for. The program will then append
+what the short form is, and secondly what it stands for. The program will then append
 a line to a file kept on the local machine that stores the acronym.
 
 For looking up an abbreviation, I would like to supply the short form, and then
