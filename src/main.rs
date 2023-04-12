@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::OpenOptions;
 use std::{path::{Path, PathBuf}, fs};
@@ -97,23 +98,36 @@ impl fmt::Display for StorageCorrupted {
 
 impl error::Error for StorageCorrupted { }
 
+fn parse_abbreviations(string: &str) -> Result<HashMap<String, Vec<String>>, ()> {
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for line in string.lines() {
+        let parts: Vec<&str> = line.split(':').collect();
+        if parts.len() != 2 {
+            return Err(());
+        }
+        let (key, val) = (parts[0].to_uppercase(), parts[1]);
+        if let Some(vals) = map.get_mut(&key) {
+            vals.push(val.to_owned());
+        } else {
+            map.insert(key, vec![val.to_owned()]);
+        }
+    }
+    Ok(map)
+}
+
 fn get_matches(folder: &ProgramFolder, abbr: &str) -> Result<Vec<String>, Box<dyn error::Error>> {
     let mut f = folder.read_storage()?;
     let mut content = String::new();
-    let mut matches = Vec::new();
     let abbr = abbr.to_uppercase();
     f.read_to_string(&mut content)?;
-    for line in content.lines() {
-        let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() != 2 {
-            return Err(StorageCorrupted.into());
-        }
-        let (cmp, res) = (parts[0].to_uppercase(), parts[1]);
-        if abbr == cmp {
-            matches.push(res.to_owned());
-        }
+    if let Ok(data) = parse_abbreviations(&content) {
+        Ok(match data.get(&abbr) {
+            Some(matches) => matches.to_owned(),
+            None => Vec::new(),
+        })
+    } else {
+        Err(StorageCorrupted.into())
     }
-    Ok(matches)
 }
 
 fn print_possibilities(search: &str) {
