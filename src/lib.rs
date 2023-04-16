@@ -5,7 +5,6 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
-
 use config::{Config, Mode};
 use storage::Storage;
 
@@ -38,12 +37,10 @@ pub fn run_put(abbr: &str, full: &str) -> BoxResult<()> {
     let abbr = abbr.to_uppercase();
 
     let path = get_path()?;
-
     let mut storage = Storage::open(&path)?;
-
     storage.store(&abbr, full);
-
     storage.save(&path)?;
+    println!("{} is now stored!", abbr);
 
     Ok(())
 }

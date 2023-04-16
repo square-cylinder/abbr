@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::path::Path;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
@@ -23,17 +24,18 @@ impl Storage {
         let mut file = options.open(path)?;
         file.read_to_string(&mut contents)?;
 
-        Ok(Self::new(&contents)?)
+        Ok(Self::parse(&contents)?)
     }
 
-    pub fn new(contents: &str) -> serde_json::Result<Self> {
-        let storage: Storage = if contents.is_empty() {
-            Storage { data: HashMap::new() }
-        } else {
-            serde_json::from_str(&contents)?
-        };
+    pub fn parse(contents: &str) -> serde_json::Result<Self> {
+        match contents.is_empty() {
+            true => Ok(Self::new()),
+            false => serde_json::from_str(&contents),
+        }
+    }
 
-        Ok(storage)
+    pub fn new() -> Self {
+        Self { data: HashMap::new() }
     }
 
     pub fn store(&mut self, abbr: &str, full: &str) {
@@ -43,19 +45,19 @@ impl Storage {
     }
 
     fn stringify_matches(matches: &Vec<String>) -> String {
-        let mut result = String::new();
-        if matches.len() == 1 {
-            result.push_str(&matches[0]);
-        } else if matches.len() > 1 {
-            result.push_str("Matches\n");
-            for matching in matches {
-                result.push_str(&format!(" * {matching}\n"));
+        match matches.len().cmp(&1) {
+            Ordering::Less => "No matches :(".to_owned(),
+            Ordering::Equal => matches[0].to_owned(),
+            Ordering::Greater => {
+                let mut s = String::new();
+                s.push_str("Matches\n");
+                for matching in matches.iter() {
+                    s.push_str(&format!(" * {matching}\n"));
+                }
+                s.pop();
+                s
             }
-            result.pop();
-        } else {
-            result.push_str("No matches :(");
         }
-        result
     }
 
     pub fn get_as_str(&self, abbr: &str) -> String {

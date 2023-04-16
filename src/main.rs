@@ -7,7 +7,7 @@ fn main() {
     let command = Config::parse();
 
     if let Err(err) = abbr::run(command) {
-        eprintln!("Application error:\n{err}");
+        eprintln!("Something went wrong:\n{err}");
         process::exit(1);
     }
 }
