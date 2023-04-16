@@ -1,3 +1,5 @@
+use std::process;
+
 use clap::Parser;
 use abbr::config::Config;
 
@@ -6,6 +8,7 @@ fn main() {
 
     if let Err(err) = abbr::run(command) {
         eprintln!("Application error:\n{err}");
+        process::exit(1);
     }
 }
 
