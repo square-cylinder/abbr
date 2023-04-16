@@ -66,7 +66,7 @@ impl Storage {
 
     pub fn save(&self, path: &Path) -> io::Result<()> {
         let mut options = OpenOptions::new();
-        options.write(true).create(true);
+        options.write(true).create(true).truncate(true);
 
         let mut file = options.open(&path)?;
         self.save_to_file(&mut file)?;
