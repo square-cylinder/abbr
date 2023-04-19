@@ -87,8 +87,8 @@ impl Display for EntryItem {
 /// Datatype for representing a collection of abbreviations
 #[derive(Serialize, Deserialize)]
 pub struct Storage {
-    data: HashMap<String, Entry>,
     total_stored_items: u32,
+    data: HashMap<String, Entry>,
 }
 
 impl Storage {
@@ -172,7 +172,7 @@ impl Storage {
     }
 
     pub fn save_to_file(&self, file: &mut File) -> io::Result<()> {
-        let json = serde_json::to_string(self).expect("Failed to serialize storage");
+        let json = serde_json::to_string_pretty(self).expect("Failed to serialize storage");
         file.write(json.as_bytes())?;
         Ok(())
     }
