@@ -38,7 +38,7 @@ pub fn run_put(abbr: &str, full: &str) -> BoxResult<()> {
 
     let path = get_path()?;
     let mut storage = Storage::open(&path)?;
-    storage.store(&abbr, full);
+    storage.store(&abbr, full)?;
     storage.save(&path)?;
     println!("{} is now stored!", abbr);
 

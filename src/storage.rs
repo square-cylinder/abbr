@@ -8,8 +8,6 @@ use std::error::Error;
 use std::io;
 use std::fmt::Display;
 
-type BoxResult<T> = Result<T, Box<dyn Error>>;
-
 /// Datatype for representing an abbreviation, with all its possible matches
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Entry {
@@ -26,6 +24,23 @@ impl Entry {
     /// Gives all matching meanings with description 
     pub fn items(&self) -> &[EntryItem] {
         &self.items
+    }
+
+    fn new(short_form: String, items: Vec<EntryItem>) -> Self {
+        Self {
+            short_form,
+            items,
+        }
+    }
+
+    fn add_item(&mut self, item: EntryItem) -> StorageResult<()> {
+        for item in self.items() {
+            if item.meaning() == item.meaning() {
+                return Err(StorageError::DuplicateEntry);
+            }
+        }
+        self.items.push(item);
+        Ok(())
     }
 }
 
@@ -84,6 +99,27 @@ impl Display for EntryItem {
     }
 }
 
+#[derive(Debug)]
+pub enum StorageError {
+    ParseError(serde_json::Error),
+    FileError(io::Error),
+    DuplicateEntry,
+}
+
+impl Display for StorageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StorageError::ParseError(err) => write!(f, "Failed to parse storage ({})", err),
+            StorageError::FileError(err) => write!(f, "Storage-error when handling file ({})", err),
+            StorageError::DuplicateEntry => write!(f, "Entry already exists in storage"),
+        }
+    }
+}
+
+impl Error for StorageError { }
+
+pub type StorageResult<T> = Result<T, StorageError>;
+
 /// Datatype for representing a collection of abbreviations
 #[derive(Serialize, Deserialize)]
 pub struct Storage {
@@ -93,54 +129,53 @@ pub struct Storage {
 
 impl Storage {
 
-    /// Deprecated, don't use
-    pub fn open(path: &Path) -> BoxResult<Self> {
+    /// Opens path and converts into a Storage object
+    pub fn open(path: &Path) -> StorageResult<Self> {
         let mut options = OpenOptions::new();
         options.read(true).write(true).create(true);
 
         let mut contents = String::new();
-        let mut file = options.open(path)?;
-        file.read_to_string(&mut contents)?;
+        let mut file = options.open(path).map_err(|e| StorageError::FileError(e))?;
+        file.read_to_string(&mut contents).map_err(|e| StorageError::FileError(e))?;
 
         Ok(Self::parse(&contents)?)
     }
 
     /// Converts a json representation of a storage object as a string into
     /// a storage object
-    pub fn parse(contents: &str) -> serde_json::Result<Self> {
+    pub fn parse(contents: &str) -> StorageResult<Self> {
         match contents.is_empty() {
             true => Ok(Self::new()),
-            false => serde_json::from_str(&contents),
+            false => serde_json::from_str(&contents)
+                .map_err(|err| StorageError::ParseError(err)),
         }
     }
 
     /// Creates a brand new, empty Storage object
     pub fn new() -> Self {
-        Self { 
+        Self {
             data: HashMap::new(),
             total_stored_items: 0,
         }
     }
 
     /// Stores a new abbreviation without description for now...
-    pub fn store(&mut self, abbr: &str, full: &str) {
-        let full = full.to_owned();
+    pub fn store(&mut self, abbr: &str, full: &str) -> StorageResult<()> {
         let item = EntryItem {
-            meaning: full,
+            meaning: full.to_owned(),
             description: None,
             id: self.total_stored_items,
         };
         self.total_stored_items += 1;
         match self.data.get_mut(abbr) {
-            Some(entry) => entry.items.push(item), // TODO: some extra logic to avoid duplicates
+            Some(entry) => entry.add_item(item)?,
             None => {
-                let entry = Entry {
-                    short_form: abbr.to_owned(),
-                    items: vec![item],
-                };
-                self.data.insert(abbr.to_owned(), entry);
+                self.data.insert(abbr.to_owned(),
+                Entry::new(abbr.to_owned(), vec![item])
+            );
             },
         }
+        Ok(())
     }
 
     /// Returns an entry
@@ -162,18 +197,20 @@ impl Storage {
         entry.to_string()
     }
 
-    pub fn save(&self, path: &Path) -> io::Result<()> {
+    /// Store storage as json in file at path
+    pub fn save(&self, path: &Path) -> StorageResult<()> {
         let mut options = OpenOptions::new();
         options.write(true).create(true).truncate(true);
 
-        let mut file = options.open(&path)?;
+        let mut file = options.open(&path).map_err(|err| StorageError::FileError(err))?;
         self.save_to_file(&mut file)?;
         Ok(())
     }
 
-    pub fn save_to_file(&self, file: &mut File) -> io::Result<()> {
+    /// Store storage as json in file
+    pub fn save_to_file(&self, file: &mut File) -> StorageResult<()> {
         let json = serde_json::to_string_pretty(self).expect("Failed to serialize storage");
-        file.write(json.as_bytes())?;
+        file.write(json.as_bytes()).map_err(|err| StorageError::FileError(err))?;
         Ok(())
     }
 }
