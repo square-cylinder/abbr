@@ -4,9 +4,9 @@ use clap::Parser;
 use abbr::config::Config;
 
 fn main() {
-    let command = Config::parse();
+    let config = Config::parse();
 
-    if let Err(err) = abbr::run(command) {
+    if let Err(err) = abbr::run(config) {
         eprintln!("Something went wrong:\n{err}");
         process::exit(1);
     }

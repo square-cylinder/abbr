@@ -4,7 +4,8 @@ use std::path::Path;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::collections::HashMap;
-use std::error::Error;
+use std::error;
+use std::result;
 use std::io;
 use std::fmt::Display;
 
@@ -92,8 +93,8 @@ impl Display for EntryItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self { meaning, description, id } = self;
         write!(f, "item: {} ({})", meaning, id)?;
-        if let Some(descr) = description {
-            write!(f, "\ndescription: {}", descr)?;
+        if let Some(description) = description {
+            write!(f, "\ndescription: {}", description)?;
         }
         Ok(())
     }
@@ -116,9 +117,12 @@ impl Display for StorageError {
     }
 }
 
-impl Error for StorageError { }
+impl error::Error for StorageError { }
 
-pub type StorageResult<T> = Result<T, StorageError>;
+pub type StorageResult<T> = result::Result<T, StorageError>;
+
+pub type Result<T> = StorageResult<T>;
+pub type Error = StorageError;
 
 /// Datatype for representing a collection of abbreviations
 #[derive(Serialize, Deserialize)]
@@ -159,11 +163,13 @@ impl Storage {
         }
     }
 
-    /// Stores a new abbreviation without description for now...
-    pub fn store(&mut self, abbr: &str, full: &str) -> StorageResult<()> {
+    /// Stores a new abbreviation
+    pub fn store(&mut self, abbr: &str, full: &str, description: Option<&str>)
+        -> StorageResult<()> {
+        let description = description.map(|d| d.to_owned());
         let item = EntryItem {
             meaning: full.to_owned(),
-            description: None,
+            description,
             id: self.total_stored_items,
         };
         self.total_stored_items += 1;

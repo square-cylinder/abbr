@@ -3,29 +3,28 @@ pub mod storage;
 
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
-use config::{Config, Mode};
+use config::{Config, Mode, GetConfig, PutConfig};
 use storage::Storage;
 
 
 type BoxResult<T> = Result<T, Box<dyn Error>>;
 
 pub fn run(config: Config) -> BoxResult<()> {
+    let file = config.file.unwrap_or(get_path()?);
     match config.mode {
-        Mode::Get { abbr } => run_get(&abbr)?,
-        Mode::Put { abbr, full } => run_put(&abbr, &full)?,
+        Mode::Get(cfg) => run_get(cfg, &file)?,
+        Mode::Put(cfg) => run_put(cfg, &file)?,
     };
     Ok(())
 }
 
 
-pub fn run_get(abbr: &str) -> BoxResult<()> {
-    let abbr = abbr.to_uppercase();
+pub fn run_get(cfg: GetConfig, file: &Path) -> BoxResult<()> {
+    let abbr = cfg.abbr.to_uppercase();
 
-    let path = get_path()?;
-
-    let storage = Storage::open(&path)?;
+    let storage = Storage::open(file)?;
 
     let matching = storage.get_as_str(&abbr);
     println!("{}", matching);
@@ -33,13 +32,13 @@ pub fn run_get(abbr: &str) -> BoxResult<()> {
     Ok(())
 }
 
-pub fn run_put(abbr: &str, full: &str) -> BoxResult<()> {
-    let abbr = abbr.to_uppercase();
+pub fn run_put(cfg: PutConfig, file: &Path) -> BoxResult<()> {
+    let abbr = cfg.abbr.to_uppercase();
+    let description = cfg.description.as_deref();
 
-    let path = get_path()?;
-    let mut storage = Storage::open(&path)?;
-    storage.store(&abbr, full)?;
-    storage.save(&path)?;
+    let mut storage = Storage::open(file)?;
+    storage.store(&abbr, &cfg.full, description)?;
+    storage.save(file)?;
     println!("{} is now stored!", abbr);
 
     Ok(())
