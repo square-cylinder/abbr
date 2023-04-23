@@ -1,256 +1,241 @@
-use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
-use std::path::Path;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
-use std::collections::HashMap;
-use std::error;
-use std::result;
-use std::io;
-use std::fmt::Display;
+use std::{
+    fmt,
+    path::Path,
+    collections::HashMap,
+    error,
+    fs::OpenOptions,
+    result,
+    io::{self, Read, Write},
+};
 
-/// Datatype for representing an abbreviation, with all its possible matches
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Entry {
-    short_form: String,
-    items: Vec<EntryItem>,
+use serde::{Serialize, Deserialize};
+
+type Error = StorageError;
+type Result<T> = result::Result<T, Error>;
+
+pub struct StorageModification {
+    acronym: String,
+    id: Option<usize>,
+    new_name: Option<String>,
+    new_description: Option<Option<String>>,
 }
 
-impl Entry {
-    /// Gives the abbreviation name in the short form
-    pub fn short(&self) -> &str {
-        &self.short_form
-    }
-
-    /// Gives all matching meanings with description 
-    pub fn items(&self) -> &[EntryItem] {
-        &self.items
-    }
-
-    fn new(short_form: String, items: Vec<EntryItem>) -> Self {
+impl StorageModification {
+    pub fn new(acronym: String, id: Option<usize>) -> Self {
         Self {
-            short_form,
-            items,
+            acronym,
+            id,
+            new_name: None,
+            new_description: None,
         }
     }
 
-    fn add_item(&mut self, item: EntryItem) -> StorageResult<()> {
-        for item in self.items() {
-            if item.meaning() == item.meaning() {
-                return Err(StorageError::DuplicateEntry);
-            }
-        }
-        self.items.push(item);
-        Ok(())
+    pub fn name(mut self, new_name: String) -> Self {
+        self.new_name = Some(new_name);
+        self
+    }
+
+    pub fn description(mut self, new_description: Option<String>) -> Self {
+        self.new_description = Some(new_description);
+        self
     }
 }
 
-impl Display for Entry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.items.len().cmp(&1) {
-            Ordering::Less => write!(f, "{} has no matches", self.short_form),
-            Ordering::Equal => write!(f, "{}:\n{}", self.short_form, self.items()[0]),
-            Ordering::Greater => {
-                writeln!(f, "{} is one of the following:", self.short_form)?;
-                for (index, item) in self.items().iter().enumerate() {
-                    writeln!(f, "\nOption {}:", index + 1)?;
-                    write!(f, "{}", item)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-/// Datatype for displaying a single match for an abbreviation. Does not
-/// contain any information about the short form.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct EntryItem {
-    meaning: String,
-    description: Option<String>,
-    id: u32,
-}
-
-impl EntryItem {
-
-    /// Returns the item description as an option, because it can be omitted
-    pub fn description(&self) -> Option<&str> {
-        self.description.as_ref().map(|x| x.as_str())
-    }
-
-    /// Returns the meaning (long form) of the abbreviation it represents
-    pub fn meaning(&self) -> &str {
-        &self.meaning
-    }
-
-    /// Returns the entry id for the item
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-}
-
-impl Display for EntryItem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self { meaning, description, id } = self;
-        write!(f, "item: {} ({})", meaning, id)?;
-        if let Some(description) = description {
-            write!(f, "\ndescription: {}", description)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub enum StorageError {
-    ParseError(serde_json::Error),
-    FileError(io::Error),
-    DuplicateEntry,
-}
-
-impl Display for StorageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StorageError::ParseError(err) => write!(f, "Failed to parse storage ({})", err),
-            StorageError::FileError(err) => write!(f, "Storage-error when handling file ({})", err),
-            StorageError::DuplicateEntry => write!(f, "Entry already exists in storage"),
-        }
-    }
-}
-
-impl error::Error for StorageError { }
-
-pub type StorageResult<T> = result::Result<T, StorageError>;
-
-pub type Result<T> = StorageResult<T>;
-pub type Error = StorageError;
-
-/// Datatype for representing a collection of abbreviations
-#[derive(Serialize, Deserialize)]
+/// Struct for representing acronym database
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Storage {
-    total_stored_items: u32,
-    data: HashMap<String, Entry>,
+    data: HashMap<String, Entry>
 }
 
 impl Storage {
 
-    /// Opens path and converts into a Storage object
-    pub fn open(path: &Path) -> StorageResult<Self> {
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
-
-        let mut contents = String::new();
-        let mut file = options.open(path).map_err(|e| StorageError::FileError(e))?;
-        file.read_to_string(&mut contents).map_err(|e| StorageError::FileError(e))?;
-
-        Ok(Self::parse(&contents)?)
-    }
-
-    /// Converts a json representation of a storage object as a string into
-    /// a storage object
-    pub fn parse(contents: &str) -> StorageResult<Self> {
-        match contents.is_empty() {
-            true => Ok(Self::new()),
-            false => serde_json::from_str(&contents)
-                .map_err(|err| StorageError::ParseError(err)),
-        }
-    }
-
-    /// Creates a brand new, empty Storage object
     pub fn new() -> Self {
         Self {
-            data: HashMap::new(),
-            total_stored_items: 0,
+            data: HashMap::new()
         }
     }
 
-    /// Stores a new abbreviation
-    pub fn store(&mut self, abbr: &str, full: &str, description: Option<&str>)
-        -> StorageResult<()> {
-        let description = description.map(|d| d.to_owned());
-        let item = EntryItem {
-            meaning: full.to_owned(),
-            description,
-            id: self.total_stored_items,
-        };
-        self.total_stored_items += 1;
-        match self.data.get_mut(abbr) {
-            Some(entry) => entry.add_item(item)?,
+    pub fn modify(
+        &mut self,
+        StorageModification { acronym, id, new_name, new_description }: StorageModification)
+        -> Result<()>
+    {
+        let entry = self.data.get_mut(&acronym)
+            .ok_or(StorageError::NoSuchItem)?;
+        let id = match id {
+            Some(val) => val,
             None => {
-                self.data.insert(abbr.to_owned(),
-                Entry::new(abbr.to_owned(), vec![item])
-            );
+                if entry.items.len() > 1 {
+                    return Err(StorageError::AmbigousItem);
+                }
+                0
+            }
+        };
+        let mut item = entry.items.get_mut(id)
+            .ok_or(StorageError::NoSuchItem)?;
+        if let Some(new_name) = new_name {
+            item.name = new_name;
+        }
+        if let Some(new_description) = new_description {
+            item.description = new_description;
+        }
+        Ok(())
+    }
+
+    /// Query data for acronym, returns string representation
+    pub fn get(&self, acronym: &str) -> String {
+        match self.data.get(acronym) {
+            Some(entry) => entry.to_string(),
+            None => format!("{} has not been stored yet", acronym),
+        }
+    }
+
+    /// Add an acronym to database, can fail if aconym is already present, i.e.
+    /// the short form and the long form are found
+    pub fn put(
+        &mut self,
+        acronym: String,
+        name: String,
+        description: Option<String>,
+    ) -> Result<()> {
+        match self.data.get_mut(&acronym) {
+            Some(entry) => entry.add_item(name, description)?,
+            None => {
+                self.data.insert(acronym.clone(), 
+                    Entry::new(acronym, vec![Item::new(name, description)])
+                );
             },
         }
         Ok(())
     }
 
-    /// Returns an entry
-    pub fn get(&self, abbr: &str) -> Entry {
-        match self.data.get(abbr) {
-            Some(entry) => entry.clone(),
-            None => {
-                Entry {
-                    short_form: abbr.to_owned(),
-                    items: Vec::new()
-                }
-            }
-        }
+    /// Loads a json encoded storage struct from a file
+    pub fn load(path: &Path) -> Result<Self> {
+        let mut file = OpenOptions::new()
+            .read(true)
+            .open(path)?;
+
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+
+        Ok(serde_json::from_str(&contents)?)
     }
 
-    /// Returns a string representation of the specified entry
-    pub fn get_as_str(&self, abbr: &str) -> String {
-        let entry = self.get(abbr);
-        entry.to_string()
-    }
+    /// Writes a json enncoded storage struct to a file
+    pub fn write(&self, path: &Path) -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)?;
 
-    /// Store storage as json in file at path
-    pub fn save(&self, path: &Path) -> StorageResult<()> {
-        let mut options = OpenOptions::new();
-        options.write(true).create(true).truncate(true);
+        let contents = serde_json::to_string_pretty(self)?;
+        file.write_all(contents.as_bytes())?;
 
-        let mut file = options.open(&path).map_err(|err| StorageError::FileError(err))?;
-        self.save_to_file(&mut file)?;
-        Ok(())
-    }
-
-    /// Store storage as json in file
-    pub fn save_to_file(&self, file: &mut File) -> StorageResult<()> {
-        let json = serde_json::to_string_pretty(self).expect("Failed to serialize storage");
-        file.write(json.as_bytes()).map_err(|err| StorageError::FileError(err))?;
         Ok(())
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Entry {
+    acronym: String,
+    items: Vec<Item>,
+}
+
+impl fmt::Display for Entry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:", self.acronym)?;
+        for (i, item) in self.items.iter().enumerate() {
+            write!(f, "\n {}) {}", i+1, item)?;
+        }
+        Ok(())
+    }
+}
+
+impl Entry {
+    fn new(acronym: String, items: Vec<Item>) -> Self {
+        Self {
+            acronym,
+            items,
+        }
+    }
+
+    fn add_item(&mut self, name: String, description: Option<String>) -> Result<()> {
+        if self.items.iter().fold(false, |acc, item| acc || &item.name == &name) {
+            return Err(StorageError::DuplicatePut(name));
+        }
+        self.items.push(Item::new(name, description));
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Item {
+    name: String,
+    description: Option<String>,
+}
+
+impl Item {
+    fn new(name: String, description: Option<String>) -> Self {
+        Self {
+            name,
+            description,
+        }
+    }
+}
+
+impl fmt::Display for Item {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(description) = self.description.as_ref() {
+            write!(f, "{}: {}", self.name, description)
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum StorageError {
+    NoSuchFile,
+    NoSuchItem,
+    AmbigousItem,
+    ParsingProblem(String),
+    DuplicatePut(String),
+    Other(String),
+}
+
+impl fmt::Display for StorageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoSuchFile => write!(f, "Tried to load a file which doesn't exist"),
+            Self::NoSuchItem => write!(f, "Item does not exist in storage"),
+            Self::AmbigousItem => write!(f, "Not enough information to decide which item, please provide an id"),
+            Self::ParsingProblem(s) => write!(f, "Failed to parse storage: {}", s),
+            Self::DuplicatePut(s) => write!(f, "{} already exists in storage", s),
+            Self::Other(s) => write!(f, "Unexpected storage error: {}", s),
+        }
+    }
+}
+
+impl From<io::Error> for StorageError {
+    fn from(value: io::Error) -> Self {
+        match value.kind() {
+            io::ErrorKind::NotFound => StorageError::NoSuchFile,
+            _ => StorageError::Other(value.to_string()),
+        }
+    }
+}
+
+impl From<serde_json::Error> for StorageError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::ParsingProblem(value.to_string())
+    }
+}
+
+impl error::Error for StorageError { }
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn entry_item_basic_functions_with_description() {
-        let item = EntryItem {
-            meaning: String::from("Central Processing Unit"), 
-            description: Some(String::from("The brain of the computer")), 
-            id: 1234
-        };
-        assert_eq!(item.to_string(), "\
-item: Central Processing Unit (1234)
-description: The brain of the computer");
-        assert_eq!(item.meaning(), "Central Processing Unit");
-        assert_eq!(item.description(), Some("The brain of the computer"));
-        assert_eq!(item.id(), 1234);
-    }
-
-    #[test]
-    fn entry_item_basic_functions_without_description() {
-        let item = EntryItem {
-            meaning: String::from("Central Processing Unit"), 
-            description: None,
-            id: 1234
-        };
-        assert_eq!(item.to_string(), "item: Central Processing Unit (1234)");
-        assert_eq!(item.meaning(), "Central Processing Unit");
-        assert_eq!(item.description(), None);
-        assert_eq!(item.id(), 1234);
-    }
 
 }

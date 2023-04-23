@@ -6,6 +6,7 @@ use clap::{Subcommand, Parser, Args};
 pub enum Mode {
     Put(PutConfig),
     Get(GetConfig),
+    Mod(ModConfig),
 }
 
 #[derive(Args, Debug)]
@@ -25,7 +26,32 @@ pub struct PutConfig {
     pub description: Option<String>,
 }
 
+fn parse_id(arg: &str) -> Result<usize, String> {
+    let num: usize = arg.parse::<usize>()
+        .map_err(|err| err.to_string())?;
+    if num < 1 {
+        return Err(String::from("id needs to be greater than or equal to 1"));
+    }
+    Ok(num)
+}
+
+#[derive(Args, Debug)]
+pub struct ModConfig {
+    /// The abbreviation you want to modify
+    pub abbr: String,
+    /// The associated id (may be excluded if there is only one item)
+    #[arg(value_parser=parse_id)]
+    pub id: Option<usize>,
+    /// Optional new meaning
+    #[arg(short, long)]
+    pub meaning: Option<String>,
+    /// Optional new description (use with empty string to remove current)
+    #[arg(short, long)]
+    pub description: Option<String>,
+}
+
 #[derive(Parser, Debug)]
+#[clap(author, version, about)]
 pub struct Config {
     #[command(subcommand)]
     pub mode: Mode,
@@ -33,4 +59,3 @@ pub struct Config {
     #[arg(short, long)]
     pub file: Option<PathBuf>,
 }
-

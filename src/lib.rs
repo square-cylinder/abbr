@@ -1,46 +1,73 @@
 pub mod config;
 pub mod storage;
 
-use std::error::Error;
+use std::error;
 use std::fs;
 use std::path::{PathBuf, Path};
+use std::result;
 
-use config::{Config, Mode, GetConfig, PutConfig};
-use storage::Storage;
+use config::{Config, Mode, GetConfig, PutConfig, ModConfig};
 
+use storage::{Storage, StorageModification, StorageError};
 
-type BoxResult<T> = Result<T, Box<dyn Error>>;
+type BoxResult<T> = result::Result<T, Box<dyn error::Error>>;
 
 pub fn run(config: Config) -> BoxResult<()> {
     let file = config.file.unwrap_or(get_path()?);
     match config.mode {
-        Mode::Get(cfg) => run_get(cfg, &file)?,
-        Mode::Put(cfg) => run_put(cfg, &file)?,
-    };
-    Ok(())
+        Mode::Get(cfg) => run_get(cfg, &file),
+        Mode::Put(cfg) => run_put(cfg, &file),
+        Mode::Mod(cfg) => run_mod(cfg, &file),
+    }
 }
 
 
 pub fn run_get(cfg: GetConfig, file: &Path) -> BoxResult<()> {
+    let storage = match Storage::load(file) {
+        Ok(v) => v,
+        Err(StorageError::NoSuchFile) => {
+            println!("You have yet to store any abbreviations, do so with `abbr put`");
+            return Ok(());
+        }
+        Err(e) => return Err(e.into()),
+    };
     let abbr = cfg.abbr.to_uppercase();
-
-    let storage = Storage::open(file)?;
-
-    let matching = storage.get_as_str(&abbr);
-    println!("{}", matching);
-
+    println!("{}", storage.get(&abbr));
     Ok(())
 }
 
 pub fn run_put(cfg: PutConfig, file: &Path) -> BoxResult<()> {
-    let abbr = cfg.abbr.to_uppercase();
-    let description = cfg.description.as_deref();
+    let mut storage = match Storage::load(file) {
+        Ok(v) => v,
+        Err(StorageError::NoSuchFile) => Storage::new(),
+        Err(e) => return Err(e.into()),
+    };
+    let PutConfig { abbr, full, description } = cfg;
+    let abbr = abbr.to_uppercase();
+    storage.put(abbr.clone(), full.clone(), description)?;
+    storage.write(file)?;
+    println!("Successfully added: {} - {}", abbr, full);
+    Ok(())
+}
 
-    let mut storage = Storage::open(file)?;
-    storage.store(&abbr, &cfg.full, description)?;
-    storage.save(file)?;
-    println!("{} is now stored!", abbr);
-
+pub fn run_mod(cfg: ModConfig, file: &Path) -> BoxResult<()> {
+    let mut storage = Storage::load(file)?;
+    let ModConfig { abbr, id, meaning, description } = cfg;
+    let modification = StorageModification::new(abbr.to_uppercase(), id.map(|num| num - 1));
+    let modification = if let Some(name) = meaning {
+        modification.name(name)
+    } else {
+        modification
+    };
+    let modification = match description.as_deref() {
+        None => modification,
+        Some("") => modification.description(None),
+        Some(_) => modification.description(Some(description.unwrap())),
+    };
+    storage.modify(modification)?;
+    storage.write(file)?;
+    let id = id.unwrap_or(1);
+    println!("Successfully modified: {} ({})", abbr, id);
     Ok(())
 }
 
@@ -66,4 +93,9 @@ fn get_dir() -> BoxResult<PathBuf> {
     }
 
     Ok(dir)
+}
+
+#[cfg(test)]
+mod tests {
+
 }
