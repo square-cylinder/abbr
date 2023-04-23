@@ -7,6 +7,7 @@ pub enum Mode {
     Put(PutConfig),
     Get(GetConfig),
     Mod(ModConfig),
+    Del(DelConfig),
 }
 
 #[derive(Args, Debug)]
@@ -48,6 +49,15 @@ pub struct ModConfig {
     /// Optional new description (use with empty string to remove current)
     #[arg(short, long)]
     pub description: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct DelConfig {
+    /// The abbreviation you want to modify
+    pub abbr: String,
+    /// The associated id (may be excluded if there is only one item)
+    #[arg(value_parser=parse_id)]
+    pub id: Option<usize>,
 }
 
 #[derive(Parser, Debug)]

@@ -55,6 +55,29 @@ impl Storage {
         }
     }
 
+    pub fn delete(&mut self, acronym: &str, id: Option<usize>) -> Result<()> {
+        let entry = self.data.get_mut(acronym)
+            .ok_or(StorageError::NoSuchItem)?;
+        let id = match id {
+            Some(val) => val,
+            None => {
+                if entry.items.len() > 1 {
+                    return Err(StorageError::AmbigousItem);
+                }
+                0
+            }
+        };
+        if id < entry.items.len() {
+            entry.items.remove(id);
+        } else {
+            return Err(StorageError::NoSuchItem);
+        }
+        if entry.items.is_empty(){
+            self.data.remove(acronym);
+        }
+        Ok(())
+    }
+
     pub fn modify(
         &mut self,
         StorageModification { acronym, id, new_name, new_description }: StorageModification)
@@ -86,7 +109,7 @@ impl Storage {
     pub fn get(&self, acronym: &str) -> String {
         match self.data.get(acronym) {
             Some(entry) => entry.to_string(),
-            None => format!("{} has not been stored yet", acronym),
+            None => format!("{} is not stored", acronym),
         }
     }
 

@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{PathBuf, Path};
 use std::result;
 
-use config::{Config, Mode, GetConfig, PutConfig, ModConfig};
+use config::{Config, Mode, GetConfig, PutConfig, ModConfig, DelConfig};
 
 use storage::{Storage, StorageModification, StorageError};
 
@@ -18,6 +18,7 @@ pub fn run(config: Config) -> BoxResult<()> {
         Mode::Get(cfg) => run_get(cfg, &file),
         Mode::Put(cfg) => run_put(cfg, &file),
         Mode::Mod(cfg) => run_mod(cfg, &file),
+        Mode::Del(cfg) => run_del(cfg, &file),
     }
 }
 
@@ -68,6 +69,17 @@ pub fn run_mod(cfg: ModConfig, file: &Path) -> BoxResult<()> {
     storage.write(file)?;
     let id = id.unwrap_or(1);
     println!("Successfully modified: {} ({})", abbr, id);
+    Ok(())
+}
+
+pub fn run_del(cfg: DelConfig, file: &Path) -> BoxResult<()> {
+    let mut storage = Storage::load(file)?;
+    let DelConfig { abbr, id } = cfg;
+    let abbr = abbr.to_uppercase();
+    storage.delete(&abbr, id.map(|num| num - 1))?;
+    storage.write(file)?;
+    let id = id.unwrap_or(1);
+    println!("Successfully deleted: {} ({})", abbr, id);
     Ok(())
 }
 
